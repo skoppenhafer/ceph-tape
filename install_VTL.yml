@@ -1,0 +1,43 @@
+--- 
+- name: Install the VTL software
+  hosts: vtl-group
+  become: true
+
+  tasks:
+
+  - name: copy RPM to the target system(s)
+    copy:
+     src: ./quadstor-vtl-ext-3.0.27-rhel.x86_64.rpm
+     dest: /tmp/quadstor-vtl-ext-3.0.27-rhel.x86_64.rpm
+
+  - name: Install the rpm file.
+    yum:
+     name: /tmp/quadstor-vtl-ext-3.0.27-rhel.x86_64.rpm
+     state: present
+
+  - name: Start service quadstor, if not running
+    service:
+     name: quadstorvtl
+     state: started
+
+  - name: Start service httpd, if not running
+    service:
+     name: httpd
+     state: started
+
+#----------------Configuration-----------//
+#
+#note at some point I should go back and use variables for the /dev path so it is created 
+
+#  - name: Add the disk(s) to the storage pool 
+#    shell: /quadstorvtl/bin/bdconfig -a -d /dev/sdb
+#    ignore_errors: yes
+
+#  - name: Add a VTL 
+#    shell: /quadstorvtl/bin/vtconfig -a -v test002 -t 09 -d 21 -c 1 -s 1
+#    ignore_errors: yes
+
+#  - name: Add a virtual cartidge 
+#    shell: /quadstorvtl/bin/vcconfig -a -v test002 -g default -p VC0001 -t 13 -c 1
+#    ignore_errors: yes
+
