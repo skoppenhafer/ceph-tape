@@ -1,0 +1,31 @@
+---
+- name: install LTFS
+  hosts: vtl
+  become: yes
+
+  tasks:
+
+   - name: install prereqs
+     yum: name={{ item }} state=present
+     with_items:
+       - icu
+       - fuse-libs
+       - fuse
+       - e2fsprogs
+       - libxml2
+       - net-snmp
+
+   - name: Add the fuse module to kernel
+     modprobe:
+      name: fuse
+      state: present
+
+   - name: Copy the LTFS rpm to the target system(s)
+     copy:
+      src: ./ltfssde-2.4.0.2-10071-RHEL7.x86_64.rpm
+      dest: /tmp/ltfssde-2.4.0.2-10071-RHEL7.x86_64.rpm 
+
+   - name: Install LTFS
+     yum:
+      name: /tmp/ltfssde-2.4.0.2-10071-RHEL7.x86_64.rpm
+      state: present

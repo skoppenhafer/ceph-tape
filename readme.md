@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #CEPH VTL
 
 ##BACKGROUND
@@ -115,3 +116,9 @@ $ceph osd out 3
 $sudo ceph auth del osd.3
 $sudo ceph osd crush remove osd.3
 $sudo ceph osd rm 3
+=======
+This repository contains some helpful playbooks and a procedure for testing ceph with LTFS via a virtual tape library.  Initial testing was successful however this virtual environment is inadequate to determine whether or not this is feasible.  Long term benefit is to create cold storage option and hierarchical storage management possibilities within ceph.  
+
+
+See procedure.txt for outline.
+>>>>>>> dc4538220a3a388e092f6a0849b8f11b4b41708a

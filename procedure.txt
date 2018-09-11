@@ -1,0 +1,126 @@
+
+//Provision you're infrastructure.  For an example see the gcp-genvm script.
+$./gcp-genvm.sh
+
+//Set you're ansible configuration for the VTL group.  For this demo the VTL, LTFS, and CEPH will be a single node.
+
+//Deploy the ceph cluster, one osd in the configuration file, we will use the other drive for LTFS.  You will need to gather the ansible-ceph package.
+$ansible-playbook site.yml
+
+//install prereqs for the VTL
+ansible-playbook install_prereqs.yml
+
+//installed VTL
+ansible-playbook install_VTL.yml
+
+//After you create the VTL you will need to use the console to create the drive(s).
+>>add HTTP access to the VMs
+>>clean up the VTL configuration
+>>configure a new LTO-6 standalone drive
+
+//download the IBM Tape Driver
+>>lin_tape-3.0.31-1.src.rpm
+
+//install the IBM Driver
+$ansible-playbook Install_IBM_Driver.yml
+
+//Download ltfs
+>>ltfssde-2.4.0.2-10071-RHEL7.x86_64.rpm
+
+//install LTFS
+$ansible-playbook install_LTFS.yml
+
+//--------BEGIN TESTING CEPH-TAPE------//
+
+//ensure permissions are correct
+$sudo chmod a+rw /dev/IBMtape*
+
+//list device_list
+$ltfs -o device_list
+
+//create filesystem (you may get an XML error, try again.)
+$mkltfs -d /dev/IBMtape0 -s VTL001
+
+//create the osd (note use the output in the next steps, for example osd #3 below)
+//http://docs.ceph.com/docs/jewel/rados/operations/add-or-rm-osds/
+$sudo ceph osd create
+
+//make the directory where the FS will be mounted.
+$sudo mkdir /var/lib/ceph/osd/ceph-3
+
+//make the ceph user the owner of the directory
+$sudo chown ceph: /var/lib/ceph/osd/ceph-3
+
+//NOTE: if the sudo user does not have the ltfs binary in the path, can be found with "$whereis ltfs" and then execute absolute path
+//mount, you may have to do this several times if getting the XML error
+$sudo /usr/local/bin/ltfs -o devname=/dev/IBMtape0 -o uid=ceph -o gid=ceph /var/lib/ceph/osd/ceph-3
+
+//initialize the OSD data directory
+$sudo ceph-osd -i 3 --mkfs --mkkey --setuser ceph --setgroup ceph
+
+
+//Register the OSD authentication key
+$sudo ceph auth add osd.3 osd 'allow *' mon 'allow rwx' -i /var/lib/ceph/osd/ceph-3/keyring
+
+//add to the default bucket NOTE: This will need to be changed this later, this is just for TESTING,
+//you can view the crush tree with $sudo ceph osd crush tree to examine the weighting/location
+$sudo ceph osd crush add 3 1.0 root=default
+
+//CHANGED THE CEPH CONF FILE
+>>osd max object name len = 256
+>>osd max object namespace len = 64
+>>journal aio = false
+
+$sudo /usr/bin/ceph-osd -f --cluster ceph --id 3 --setuser ceph --setgroup ceph
+
+//----------------------TESTING-----------------//
+
+//create storage pool
+$sudo ceph osd pool create whirlpool 64
+
+//write file
+$touch test1.txt
+$sudo rados -p whirlpool put test1 test1.txt
+
+//list file writes
+$sudo rados -p whirlpool ls -
+
+//benchmark the object store
+$sudo rados bench -p whirlpool 1 write --no-cleanup
+
+//----------------THE ABOVE FAILED-> TRYING JUST A DISK MANUAL ADD TO ISOLATE PROBLEM AS VTL------//
+
+> Create cluster
+> Deploy CEPH using ansible
+> Run through OSD creation steps outlined above, however with disk instead.
+
+$sudo mkfs -t xfs /dev/sdc
+$sudo mkdir /var/lib/ceph/osd/ceph-3
+$sudo mount /dev/sdc /var/lib/ceph/osd/ceph-3
+$sudo ceph-osd -i 4 --mkfs --mkkey
+$sudo ceph auth add osd.3 osd 'allow *' mon 'allow rwx' -i /var/lib/ceph/osd/ceph-3/keyring
+
+//the following seemed to be the key to getting this thing going, doing it manually instead of using systemd
+
+$sudo /usr/bin/ceph-osd --cluster ceph --id 3
+
+//remove ceph osd 3
+
+ceph osd out 3
+sudo ceph auth del osd.3
+sudo ceph osd crush remove osd.3
+sudo ceph osd rm 3
+
+
+//---------------updated the procedure for adding an OSD by changing the permssions--------------
+
+sudo mkfs -t xfs /dev/sdc
+sudo ceph osd create
+sudo mkdir /var/lib/ceph/osd/ceph-4
+//change owner of folder
+sudo chown ceph: /var/lib/ceph/osd/ceph-4
+sudo mount /dev/sdc /var/lib/ceph/osd/ceph-4
+sudo ceph-osd -i 4 --mkfs --mkkey --setuser ceph --setgroup ceph
+sudo ceph auth add osd.4 osd 'allow *' mon 'allow rwx' -i /var/lib/ceph/osd/ceph-4/keyring
+sudo ceph osd crush add 4 1.0 root=default
+sudo systemctl status ceph-osd@4
